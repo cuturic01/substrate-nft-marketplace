@@ -8,6 +8,7 @@ pub use pallet::*;
 
 #[frame::pallet(dev_mode)]
 pub mod pallet {
+
 	use super::*;
 
 	#[pallet::pallet]
@@ -18,10 +19,24 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
 
+	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo)]
+	#[scale_info(skip_type_params(T))]
+	pub struct Kitty<T: Config> {
+		pub dna: [u8; 32],
+		pub owner: T::AccountId,
+	}
+
 	#[pallet::storage]
 	pub(super) type CountForKitties<T: Config> = StorageValue<Value = u32, QueryKind = ValueQuery>;
 	#[pallet::storage]
-	pub(super) type Kitties<T: Config> = StorageMap<Key = u8, Value = ()>;
+	pub(super) type Kitties<T: Config> = StorageMap<Key = [u8; 32], Value = Kitty<T>>;
+	#[pallet::storage]
+	pub(super) type KittiesOwned<T: Config> =
+		StorageMap<
+			Key = T::AccountId, 
+			Value = BoundedVec<[u8; 32], ConstU32<100>>, 
+			QueryKind = ValueQuery
+	>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -33,13 +48,14 @@ pub mod pallet {
 	pub enum Error<T> {
 		TooManyKitties,
 		DuplicateKitty,
+		TooManyOwned
 	}
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		pub fn create_kitty(origin: OriginFor<T>) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-			let dna = 0;
+			let dna = Self::gen_dna();
 			Self::mint(who, dna)?;
 			Ok(())
 		}
